@@ -23,16 +23,95 @@ let cart = null;
 let loading = false;
 
 /* ------------------------- Utility Functions ------------------------- */
+function showToast(message, type = 'info', duration = 3000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+  
+  const toast = document.createElement('div');
+  toast.className = `toast-notification ${type}`;
+  toast.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center">
+      <span>${message}</span>
+      <button type="button" class="btn-close btn-close-white ms-3" onclick="this.parentElement.parentElement.remove()"></button>
+    </div>
+  `;
+  
+  container.appendChild(toast);
+  
+  // Auto remove after duration
+  setTimeout(() => {
+    toast.style.animation = 'fadeOut 0.3s ease-out';
+    setTimeout(() => toast.remove(), 300);
+  }, duration);
+}
+
 function showError(message) {
-  alert(message);
+  showToast(message, 'error', 4000);
 }
 
 function showSuccess(message) {
-  alert(message);
+  showToast(message, 'success', 4000);
+}
+
+function createConfetti() {
+  const container = document.getElementById('confetti-container');
+  if (!container) return;
+  
+  const colors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b', '#eb4d4b', '#6c5ce7', '#a29bfe'];
+  const confettiCount = 50;
+  
+  for (let i = 0; i < confettiCount; i++) {
+    const confetti = document.createElement('div');
+    confetti.className = 'confetti';
+    confetti.style.left = Math.random() * 100 + '%';
+    confetti.style.top = '-10px';
+    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+    confetti.style.width = Math.random() * 10 + 5 + 'px';
+    confetti.style.height = confetti.style.width;
+    confetti.style.animationDelay = Math.random() * 0.5 + 's';
+    confetti.style.animationDuration = (Math.random() * 2 + 2) + 's';
+    
+    container.appendChild(confetti);
+    
+    setTimeout(() => confetti.remove(), 3000);
+  }
+}
+
+function showWelcomeBanner(user, isNewUser = false) {
+  const mainContainer = document.querySelector('main.container');
+  if (!mainContainer) return;
+  
+  // Remove existing banner if any
+  const existingBanner = document.getElementById('welcome-banner');
+  if (existingBanner) existingBanner.remove();
+  
+  const banner = document.createElement('div');
+  banner.id = 'welcome-banner';
+  banner.className = 'welcome-banner success-animation';
+  
+  if (isNewUser) {
+    banner.innerHTML = `
+      <h3>🎉 Welcome to Hans Shop, ${user.name}! 🎉</h3>
+      <p>Your account has been created successfully. Start shopping now!</p>
+    `;
+  } else {
+    banner.innerHTML = `
+      <h3>👋 Welcome back, ${user.name}! 👋</h3>
+      <p>Great to see you again. Happy shopping!</p>
+    `;
+  }
+  
+  mainContainer.insertBefore(banner, mainContainer.firstChild);
+  
+  // Remove banner after 5 seconds
+  setTimeout(() => {
+    banner.style.animation = 'fadeOut 0.5s ease-out';
+    setTimeout(() => banner.remove(), 500);
+  }, 5000);
 }
 
 function formatPrice(price) {
-  return `$${parseFloat(price).toFixed(2)}`;
+  return `₱${parseFloat(price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function getImageUrl(product) {
@@ -64,24 +143,43 @@ document.addEventListener("DOMContentLoaded", async () => {
 function updateAuthUI() {
   const user = authAPI.getCurrentUser();
   const isAdmin = authAPI.isAdmin();
+  const aboutNavItem = document.getElementById("about-nav-item");
+  const contactNavItem = document.getElementById("contact-nav-item");
+  const cartBtn = document.getElementById("cart-btn");
   
   if (user) {
-    const roleBadge = isAdmin ? ' <span class="badge bg-danger">Admin</span>' : '';
+    const roleBadge = isAdmin ? ' <span class="badge bg-danger pulse-animation">Admin</span>' : '';
     greetingEl.innerHTML = `Hi, ${user.name}!${roleBadge}`;
+    greetingEl.classList.add("success-animation");
     loginBtn.classList.add("d-none");
     logoutBtn.classList.remove("d-none");
     
     // Show admin/orders nav links
     if (isAdmin) {
       adminNavLink.classList.remove("d-none");
+      // Hide About Us, Contact Us, Cart, and Orders for admins
+      if (aboutNavItem) aboutNavItem.classList.add("d-none");
+      if (contactNavItem) contactNavItem.classList.add("d-none");
+      if (cartBtn) cartBtn.classList.add("d-none");
+      ordersNavLink.classList.add("d-none");
+    } else {
+      // Show About Us, Contact Us, Cart, and Orders for regular users
+      if (aboutNavItem) aboutNavItem.classList.remove("d-none");
+      if (contactNavItem) contactNavItem.classList.remove("d-none");
+      if (cartBtn) cartBtn.classList.remove("d-none");
+      ordersNavLink.classList.remove("d-none");
     }
-    ordersNavLink.classList.remove("d-none");
   } else {
     greetingEl.textContent = "";
+    greetingEl.classList.remove("success-animation");
     loginBtn.classList.remove("d-none");
     logoutBtn.classList.add("d-none");
     adminNavLink.classList.add("d-none");
     ordersNavLink.classList.add("d-none");
+    // Show About Us and Contact Us when logged out
+    if (aboutNavItem) aboutNavItem.classList.remove("d-none");
+    if (contactNavItem) contactNavItem.classList.remove("d-none");
+    if (cartBtn) cartBtn.classList.remove("d-none");
   }
   
   // Update registration modal role options
@@ -139,11 +237,31 @@ document.getElementById("login-submit")?.addEventListener("click", async () => {
   }
   
   try {
-    await authAPI.login(email, password);
+    const result = await authAPI.login(email, password);
+    const user = authAPI.getCurrentUser();
+    
+    // Store email in localStorage for orders
+    if (result.user && email) {
+      localStorage.setItem('userEmail', email);
+    }
+    
+    // Add animations and effects
+    createConfetti();
+    showSuccess(`🎉 Login successful! Welcome back, ${user?.name || 'User'}!`);
+    
+    // Add pulse animation to logout button
+    logoutBtn.classList.add("pulse-animation");
+    setTimeout(() => logoutBtn.classList.remove("pulse-animation"), 500);
+    
     updateAuthUI();
     loginModal?.hide();
+    
+    // Show welcome banner
+    if (user) {
+      showWelcomeBanner(user, false);
+    }
+    
     await loadInitialData();
-    showSuccess("Login successful!");
   } catch (error) {
     if (errorEl) {
       errorEl.textContent = error.message || "Login failed. Please try again.";
@@ -190,7 +308,8 @@ document.getElementById("register-submit")?.addEventListener("click", async () =
     if (isAdminCreating) {
       // Admin stays logged in as themselves
       registerModal?.hide();
-      showSuccess(`User "${name}" (${role}) created successfully!`);
+      createConfetti();
+      showSuccess(`✅ User "${name}" (${role}) created successfully!`);
       // Reset form
       document.getElementById("register-name").value = "";
       document.getElementById("register-email").value = "";
@@ -198,10 +317,30 @@ document.getElementById("register-submit")?.addEventListener("click", async () =
       document.getElementById("register-role").value = "User";
     } else {
       // Regular user registration - log them in
+      const user = authAPI.getCurrentUser();
+      
+      // Store email in localStorage for orders
+      if (email) {
+        localStorage.setItem('userEmail', email);
+      }
+      
+      // Add animations and effects
+      createConfetti();
+      showSuccess(`🎉 Registration successful! Welcome to Hans Shop, ${name}!`);
+      
+      // Add pulse animation to logout button
+      logoutBtn.classList.add("pulse-animation");
+      setTimeout(() => logoutBtn.classList.remove("pulse-animation"), 500);
+      
       updateAuthUI();
       registerModal?.hide();
+      
+      // Show welcome banner
+      if (user) {
+        showWelcomeBanner(user, true);
+      }
+      
       await loadInitialData();
-      showSuccess(`Registration successful! You are now logged in as ${role}.`);
     }
   } catch (error) {
     if (errorEl) {
@@ -214,11 +353,17 @@ document.getElementById("register-submit")?.addEventListener("click", async () =
 });
 
 logoutBtn.addEventListener("click", () => {
-  authAPI.logout();
-  updateAuthUI();
-  cart = null;
-  renderCart();
-  showView((location.hash.replace("#", "") || "home"));
+  // Add fade out animation
+  logoutBtn.classList.add("pulse-animation");
+  
+  setTimeout(() => {
+    authAPI.logout();
+    updateAuthUI();
+    cart = null;
+    renderCart();
+    showView((location.hash.replace("#", "") || "home"));
+    showSuccess("👋 You have been logged out successfully. See you soon!");
+  }, 300);
 });
 
 /* ------------------------- Products ------------------------- */
@@ -349,6 +494,12 @@ function renderCart() {
 }
 
 async function addToCart(productId) {
+  // Prevent admins from adding to cart
+  if (authAPI.isAdmin()) {
+    showError("Admins cannot place orders. Please use a regular user account to shop.");
+    return;
+  }
+  
   try {
     cart = await cartAPI.addItem(productId, 1);
     renderCart();
@@ -438,11 +589,26 @@ async function loadOrders() {
       return;
     }
     
-    const orders = await ordersAPI.getByCustomerEmail(user.email || '');
+    // Admins should not see orders - they manage products only
+    if (authAPI.isAdmin()) {
+      ordersListEl.innerHTML = '<div class="col-12"><p class="text-muted">Admins manage products, not orders. Use the Admin panel to manage products.</p></div>';
+      return;
+    }
+    
+    // Get user email from localStorage or user object
+    // The user object from API might not have email, so we need to get it from login
+    const userEmail = user.email || localStorage.getItem('userEmail') || '';
+    
+    if (!userEmail) {
+      ordersListEl.innerHTML = '<p class="text-muted">Unable to load orders. Please log out and log in again.</p>';
+      return;
+    }
+    
+    const orders = await ordersAPI.getByCustomerEmail(userEmail);
     renderOrders(orders);
   } catch (error) {
     console.error("Error loading orders:", error);
-    ordersListEl.innerHTML = '<p class="text-danger">Failed to load orders.</p>';
+    ordersListEl.innerHTML = '<p class="text-danger">Failed to load orders. ' + (error.message || '') + '</p>';
   }
 }
 
@@ -766,6 +932,12 @@ function showView(name) {
   if (name === "products" || name === "home") {
     loadProducts();
   } else if (name === "cart") {
+    // Prevent admins from accessing cart
+    if (authAPI.isAdmin()) {
+      showView("admin");
+      showError("Admins cannot place orders. Use the Admin panel to manage products.");
+      return;
+    }
     loadCart();
     // Pre-fill checkout form with user info if logged in
     const user = authAPI.getCurrentUser();
@@ -773,9 +945,15 @@ function showView(name) {
       const nameInput = document.getElementById("customer-name");
       const emailInput = document.getElementById("customer-email");
       if (nameInput && !nameInput.value) nameInput.value = user.name || "";
-      if (emailInput && !emailInput.value) emailInput.value = user.email || "";
+      if (emailInput && !emailInput.value) emailInput.value = localStorage.getItem('userEmail') || "";
     }
   } else if (name === "orders") {
+    // Prevent admins from accessing orders
+    if (authAPI.isAdmin()) {
+      showView("admin");
+      showError("Admins manage products, not orders. Use the Admin panel.");
+      return;
+    }
     loadOrders();
   } else if (name === "admin") {
     if (authAPI.isAdmin()) {
